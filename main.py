@@ -5,22 +5,21 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# --- LangChain Imports ---
+from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 load_dotenv()
 
-# =============== GOOGLE API KEY ===============
-API_KEY = os.getenv("GOOGLE_API_KEY")
-if not API_KEY:
-    raise ValueError("GOOGLE_API_KEY missing in Render Environment Variables")
+# ====== GROQ API KEY ======
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY missing in Render environment variables")
 
-# =============== KNOWLEDGE BASE ===============
+# ====== LOAD KNOWLEDGE BASE ======
 KNOWLEDGE_BASE_DOCS = []
 for file in os.listdir("knowledge_base"):
     with open(f"knowledge_base/{file}", "r", encoding="utf-8") as f:
@@ -29,48 +28,48 @@ for file in os.listdir("knowledge_base"):
             "source": file
         })
 
-# =============== CRISIS DETECTION ===============
-CRISIS_KEYWORDS = [
-    "kill myself", "suicide", "want to die", "end my life",
-    "self-harm", "hopeless", "can't go on", "better off dead",
-    "take pills", "hang myself"
+# ====== CRISIS DETECTION ======
+CRISIS_WORDS = [
+    "suicide", "kill myself", "end my life", "self-harm", "want to die",
+    "hopeless", "cut myself", "better off dead", "can't go on"
 ]
 
-CRISIS_INTERVENTION_RESPONSE = {
+CRISIS_RESPONSE = {
     "isCrisis": True,
-    "text": "I’m really worried about you. Please reach out to Vandrevala 9999666555 or call 112 immediately."
+    "text": "I’m really concerned about you. Please call Vandrevala Helpline at 9999666555 or emergency number 112 immediately."
 }
 
-def check_crisis(msg: str) -> bool:
+def is_crisis(msg: str):
     msg = msg.lower()
-    return any(word in msg for word in CRISIS_KEYWORDS)
+    return any(word in msg for word in CRISIS_WORDS)
 
-# =============== BUILD RAG PIPELINE ===============
-def build_rag():
-    # Lightweight, CPU-only embedding model
+# ====== RAG PIPELINE CREATION ======
+def create_rag():
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # In-memory vector store (IMPORTANT for Render)
     vector_store = Chroma.from_texts(
         texts=[d["content"] for d in KNOWLEDGE_BASE_DOCS],
         embedding=embeddings,
         metadatas=[{"source": d["source"]} for d in KNOWLEDGE_BASE_DOCS],
-        collection_name="sparky",
-        persist_directory=None  # prevents writing to disk
+        persist_directory=None  # In-memory only
     )
 
     retriever = vector_store.as_retriever(search_kwargs={"k": 2})
 
     system_prompt = """
-You are Sparky, a friendly wellness assistant. Be supportive, warm, never judge.
-Context:
+You are Sparky, a caring student wellness companion.
+Be friendly, empathetic, supportive.
+Use the context below to give helpful advice.
+
+CONTEXT:
 {context}
 """
 
-    model = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+    model = ChatGroq(
+        groq_api_key=GROQ_API_KEY,
+        model="mixtral-8x7b-32768",
         temperature=0.3
     )
 
@@ -90,40 +89,40 @@ Context:
 
 rag_chain = None
 
-# =============== FASTAPI SETUP ===============
+# ====== FASTAPI INITIALIZATION ======
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 class ChatRequest(BaseModel):
     message: str
 
 @app.on_event("startup")
-async def startup_event():
+async def startup():
     global rag_chain
-    rag_chain = build_rag()
-    print("🔥 RAG Pipeline Ready on Render!")
+    rag_chain = create_rag()
+    print("🔥 RAG + Groq Backend Ready!")
 
 @app.get("/")
-async def main_page():
+async def home():
     return FileResponse("templates/index.html")
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
-    user_message = req.message.strip()
+async def chat(request: ChatRequest):
+    user_message = request.message.strip()
 
-    if check_crisis(user_message):
-        return CRISIS_INTERVENTION_RESPONSE
+    if is_crisis(user_message):
+        return CRISIS_RESPONSE
 
     try:
-        response = rag_chain.invoke(user_message)
-        return {"isCrisis": False, "text": response}
+        output = rag_chain.invoke(user_message)
+        return {"isCrisis": False, "text": output}
     except Exception as e:
         print("ERROR:", e)
-        raise HTTPException(status_code=500, detail="Internal Error")
+        raise HTTPException(status_code=500, detail="Server error")

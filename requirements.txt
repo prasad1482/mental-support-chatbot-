@@ -7,14 +7,11 @@ jinja2==3.1.4
 langchain==0.3.7
 langchain-core==0.3.17
 langchain-community==0.3.3
-langchain-google-genai==2.1.12
+langchain-groq==0.2.0
 
-# Lightweight Embeddings (NO torch download)
+# Embeddings (very lightweight)
 langchain-huggingface==0.1.0
 sentence-transformers==3.0.1
 
-# Chroma In-Memory Mode ONLY
+# Chroma in-memory
 chromadb==0.5.5
-
-# Google AI
-google-generativeai==0.8.3
