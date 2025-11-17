@@ -46,8 +46,9 @@ def is_crisis(msg: str):
 # ====== RAG PIPELINE CREATION ======
 def create_rag():
     embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+    model_name="BAAI/bge-small-en-v1.5"
+)
+
 
     vector_store = Chroma.from_texts(
         texts=[d["content"] for d in KNOWLEDGE_BASE_DOCS],
@@ -106,8 +107,10 @@ class ChatRequest(BaseModel):
 @app.on_event("startup")
 async def startup():
     global rag_chain
+    print("Starting minimal server...")
     rag_chain = create_rag()
-    print("🔥 RAG + Groq Backend Ready!")
+    print("RAG ready!")
+
 
 @app.get("/")
 async def home():
