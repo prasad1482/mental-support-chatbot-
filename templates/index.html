@@ -1,69 +1,70 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-gray-50">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sparky - Your Wellness Buddy</title>
-  <style>
-    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); margin:0; height:100vh; display:flex; justify-content:center; align-items:center; }
-    .chat-container { width: 380px; height: 620px; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden; display:flex; flex-direction:column; }
-    .header { background: #5e35b1; color: white; padding: 20px; text-align: center; }
-    .header h1 { margin:0; font-size: 22px; }
-    .messages { flex: 1; padding: 20px; overflow-y: auto; background: #f5f5f5; }
-    .message { margin: 10px 0; padding: 12px 16px; border-radius: 18px; max-width: 80%; line-height: 1.4; }
-    .user { background: #5e35b1; color: white; align-self: flex-end; margin-left: auto; }
-    .bot { background: #e0e0e0; color: #333; align-self: flex-start; }
-    .input-area { padding: 15px; background: white; border-top: 1px solid #eee; display: flex; }
-    input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 16px; }
-    button { margin-left: 10px; background: #5e35b1; color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; }
-    .typing { font-style: italic; color: #888; }
-  </style>
+  <title>Sparky – Your Mental Wellness Buddy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="chat-container">
-    <div class="header">
-      <h1>🌟 Sparky</h1>
-      <p>Your Mental Wellness Buddy</p>
-    </div>
-    <div class="messages" id="messages">
-      <div class="message bot">Hi! I'm Sparky, your wellness buddy. How are you feeling today? 💜</div>
-    </div>
-    <div class="input-area">
-      <input type="text" id="userInput" placeholder="Type your message..." autocomplete="off"/>
-      <button onclick="sendMessage()">➤</button>
+<body class="h-full">
+  <div class="min-h-full flex flex-col">
+    <header class="bg-indigo-600 text-white p-6 text-center">
+      <h1 class="text-4xl font-bold">Sparky ✨</h1>
+      <p class="text-xl mt-2">Your 24×7 Mental Wellness Buddy for Students</p>
+    </header>
+
+    <div id="chat-container" class="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col">
+      <div id="messages" class="flex-1 overflow-y-auto mb-4 space-y-4 bg-white rounded-lg shadow p-6"></div>
+      
+      <div class="flex gap-3">
+        <input type="text" id="user-input" placeholder="Type your message here..." 
+               class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+        <button id="send-btn" class="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+          Send
+        </button>
+      </div>
     </div>
   </div>
 
   <script>
-    const messages = document.getElementById("messages");
-    const input = document.getElementById("userInput");
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    function addMessage(text, isUser = false) {
+      const div = document.createElement('div');
+      div.className = isUser ? 'text-right' : 'text-left';
+      div.innerHTML = `<div class="${isUser ? 'bg-indigo-600 text-white' : 'bg-gray-200'} inline-block rounded-lg px-5 py-3 max-w-xs lg:max-w-md">
+        ${text.replace(/\n/g, '<br>')}
+      </div>`;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 
     async function sendMessage() {
       const msg = input.value.trim();
       if (!msg) return;
-      addMessage(msg, "user");
-      input.value = "";
-      addMessage("Typing...", "bot typing");
+      addMessage(msg, true);
+      input.value = '';
+      sendBtn.disabled = true;
 
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({message: msg})
       });
       const data = await res.json();
-      messages.lastElementChild.remove();
-      addMessage(data.response, "bot");
+      addMessage(data.response);
+      sendBtn.disabled = false;
+      input.focus();
     }
 
-    function addMessage(text, type) {
-      const div = document.createElement("div");
-      div.className = `message ${type}`;
-      div.innerHTML = text.replace(/\n/g, "<br>");
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    input.addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
+    sendBtn.onclick = sendMessage;
+    input.onkeypress = e => e.key === 'Enter' && sendMessage();
+    
+    // Welcome message
+    addMessage("Namaste! I'm Sparky, your mental wellness buddy ❤️<br>How are you feeling today?");
   </script>
 </body>
 </html>
