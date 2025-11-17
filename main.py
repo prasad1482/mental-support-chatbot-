@@ -1,4 +1,4 @@
-# main.py → FINAL RENDER-SUCCESS VERSION (Direct Import – No ModuleNotFound)
+# main.py → FINAL RENDER-SUCCESS VERSION (Direct Chroma – No Package Conflicts)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,11 +6,11 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 import os
 
-# LangChain imports (direct Chroma)
+# LangChain imports (direct Chroma from community)
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma  # ← DIRECT IMPORT (no langchain_chroma wrapper)
+from langchain_community.vectorstores import Chroma  # ← DIRECT FROM COMMUNITY (no langchain-chroma needed)
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -60,7 +60,7 @@ def setup_rag_pipeline():
     chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
 
     print(f"Adding {len(chunks)} chunks to Chroma vector DB...")
-    vectorstore = Chroma.from_documents(  # ← Direct Chroma call (no wrapper)
+    vectorstore = Chroma.from_documents(  # ← Direct Chroma (included in langchain-community)
         documents=chunks,
         embedding=embeddings,
         collection_name="sparky"
