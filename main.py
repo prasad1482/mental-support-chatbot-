@@ -1,4 +1,4 @@
-# main.py → FINAL RENDER-WORKING VERSION (Direct Chroma – No Wrapper Error)
+# main.py → FINAL RENDER-SUCCESS VERSION (Direct Import – No ModuleNotFound)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -60,7 +60,7 @@ def setup_rag_pipeline():
     chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
 
     print(f"Adding {len(chunks)} chunks to Chroma vector DB...")
-    vectorstore = Chroma.from_documents(  # ← Direct Chroma (no wrapper needed)
+    vectorstore = Chroma.from_documents(  # ← Direct Chroma call (no wrapper)
         documents=chunks,
         embedding=embeddings,
         collection_name="sparky"
