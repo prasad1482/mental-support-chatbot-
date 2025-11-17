@@ -1,110 +1,129 @@
-# main.py → FINAL HUGGINGFACE EMBEDDINGS VERSION (No Import Error)
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
 import os
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from dotenv import load_dotenv
 
-# LangChain imports
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings  # ← HuggingFace (no API key)
+# --- LangChain Imports ---
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+# =============== GOOGLE API KEY ===============
+API_KEY = os.getenv("GOOGLE_API_KEY")
+if not API_KEY:
+    raise ValueError("GOOGLE_API_KEY missing in Render Environment Variables")
 
-retriever = None
-rag_chain = None
+# =============== KNOWLEDGE BASE ===============
+KNOWLEDGE_BASE_DOCS = []
+for file in os.listdir("knowledge_base"):
+    with open(f"knowledge_base/{file}", "r", encoding="utf-8") as f:
+        KNOWLEDGE_BASE_DOCS.append({
+            "content": f.read(),
+            "source": file
+        })
 
-prompt_template = """
-You are Sparky, a warm, caring mental wellness buddy for Indian college students.
-Use simple English + little Hindi if natural.
+# =============== CRISIS DETECTION ===============
+CRISIS_KEYWORDS = [
+    "kill myself", "suicide", "want to die", "end my life",
+    "self-harm", "hopeless", "can't go on", "better off dead",
+    "take pills", "hang myself"
+]
 
+CRISIS_INTERVENTION_RESPONSE = {
+    "isCrisis": True,
+    "text": "I’m really worried about you. Please reach out to Vandrevala 9999666555 or call 112 immediately."
+}
+
+def check_crisis(msg: str) -> bool:
+    msg = msg.lower()
+    return any(word in msg for word in CRISIS_KEYWORDS)
+
+# =============== BUILD RAG PIPELINE ===============
+def build_rag():
+    # Lightweight, CPU-only embedding model
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    # In-memory vector store (IMPORTANT for Render)
+    vector_store = Chroma.from_texts(
+        texts=[d["content"] for d in KNOWLEDGE_BASE_DOCS],
+        embedding=embeddings,
+        metadatas=[{"source": d["source"]} for d in KNOWLEDGE_BASE_DOCS],
+        collection_name="sparky",
+        persist_directory=None  # prevents writing to disk
+    )
+
+    retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+
+    system_prompt = """
+You are Sparky, a friendly wellness assistant. Be supportive, warm, never judge.
 Context:
 {context}
-
-Question: {question}
-
-CRISIS RULE → If user mentions suicide, self-harm, "want to die", "end life", "hopeless" → reply ONLY with:
-
-**I'm really worried about you. Please reach out right now — you are not alone.**
-Indian 24×7 Free Helplines:
-• iCall (TISS): 9152987821
-• Vandrevala Foundation: 9999666555
-• Sneha Chennai: 044-24640050
-• Emergency: 112
-
-Otherwise give 1–3 practical tips from context and end with a gentle question.
-
-Answer:
 """
 
-def setup_rag_pipeline():
-    global retriever, rag_chain
-
-    print("Loading HuggingFace embeddings (lightweight)...")
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ← HuggingFace (no API key, lightweight)
-
-    print("Loading knowledge base...")
-    loader = DirectoryLoader("knowledge_base", glob="**/*.txt")
-    docs = loader.load()
-
-    print("Splitting into chunks...")
-    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
-
-    print(f"Adding {len(chunks)} chunks to Chroma...")
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        collection_name="sparky"
-    )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-
-    print("Connecting to Groq LLM...")
-    llm = ChatGroq(
-        model="llama-3.1-8b-instant",
-        temperature=0.4,
-        groq_api_key=os.getenv("GROQ_API_KEY")
+    model = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        temperature=0.3
     )
 
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-    rag_chain = (
-        {"context": retriever, "question": lambda x: x}
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{question}")
+    ])
+
+    chain = (
+        {"context": retriever, "question": RunnablePassthrough()}
         | prompt
-        | llm
-        | (lambda x: x.content)
+        | model
+        | StrOutputParser()
     )
 
-    print("SPARKY IS 100% LIVE WITH HUGGINGFACE + GROQ!")
+    return chain
+
+rag_chain = None
+
+# =============== FASTAPI SETUP ===============
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class ChatRequest(BaseModel):
+    message: str
 
 @app.on_event("startup")
 async def startup_event():
-    setup_rag_pipeline()
+    global rag_chain
+    rag_chain = build_rag()
+    print("🔥 RAG Pipeline Ready on Render!")
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.get_template("index.html").render({"request": request})
+@app.get("/")
+async def main_page():
+    return FileResponse("templates/index.html")
 
 @app.post("/chat")
-async def chat(request: Request):
-    data = await request.json()
-    user_message = data["message"].strip()
+async def chat(req: ChatRequest):
+    user_message = req.message.strip()
 
-    crisis_keywords = ["suicide", "kill myself", "end life", "want to die", "hopeless", "self harm", "no point living"]
-    if any(keyword in user_message.lower() for keyword in crisis_keywords):
-        return {"response": """**I'm really worried about you. Please reach out right now — you are not alone.**
-Indian 24×7 Free & Confidential Helplines:
-• iCall (TISS): 9152987821
-• Vandrevala Foundation: 9999666555
-• Sneha Chennai: 044-24640050
-• Emergency: 112"""}
+    if check_crisis(user_message):
+        return CRISIS_INTERVENTION_RESPONSE
 
-    response = rag_chain.invoke(user_message)
-    return {"response": response}
+    try:
+        response = rag_chain.invoke(user_message)
+        return {"isCrisis": False, "text": response}
+    except Exception as e:
+        print("ERROR:", e)
+        raise HTTPException(status_code=500, detail="Internal Error")

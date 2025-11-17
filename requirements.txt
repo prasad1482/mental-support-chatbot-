@@ -1,11 +1,20 @@
-fastapi==0.121.2
-uvicorn[standard]==0.38.0
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
 python-dotenv==1.0.1
 jinja2==3.1.4
+
+# LangChain Core
 langchain==0.3.7
+langchain-core==0.3.17
 langchain-community==0.3.3
-langchain-groq==0.2.0
+langchain-google-genai==2.1.12
+
+# Lightweight Embeddings (NO torch download)
 langchain-huggingface==0.1.0
-sentence-transformers==3.2.1
-chromadb==0.5.11
-groq==0.34.1
+sentence-transformers==3.0.1
+
+# Chroma In-Memory Mode ONLY
+chromadb==0.5.5
+
+# Google AI
+google-generativeai==0.8.3
