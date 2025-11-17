@@ -2,18 +2,10 @@ fastapi==0.121.2
 uvicorn[standard]==0.38.0
 python-dotenv==1.0.1
 jinja2==3.1.4
-
-# LangChain Core
 langchain==0.3.7
 langchain-community==0.3.3
 langchain-groq==0.2.0
-
-# HuggingFace Embeddings (lightweight, no API key)
 langchain-huggingface==0.1.0
 sentence-transformers==3.2.1
-
-# Vector Store
 chromadb==0.5.11
-
-# Utils
 groq==0.34.1
