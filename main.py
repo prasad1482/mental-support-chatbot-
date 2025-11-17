@@ -1,4 +1,4 @@
-# main.py → FINAL GROQ EMBEDDINGS VERSION (No OpenAI – 100% Render Success)
+# main.py → FINAL HUGGINGFACE EMBEDDINGS VERSION (No Import Error)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,8 +9,9 @@ import os
 # LangChain imports
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_groq import GroqEmbeddings, ChatGroq  # ← Groq for embeddings + LLM
+from langchain_huggingface import HuggingFaceEmbeddings  # ← HuggingFace (no API key)
 from langchain_community.vectorstores import Chroma
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
@@ -48,11 +49,8 @@ Answer:
 def setup_rag_pipeline():
     global retriever, rag_chain
 
-    print("Loading Groq embeddings (free & unlimited)...")
-    embeddings = GroqEmbeddings(  # ← Groq Embeddings (no download, lightweight)
-        model="mxbai-embed-large-v1",
-        groq_api_key=os.getenv("GROQ_API_KEY")
-    )
+    print("Loading HuggingFace embeddings (lightweight)...")
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ← HuggingFace (no API key, lightweight)
 
     print("Loading knowledge base...")
     loader = DirectoryLoader("knowledge_base", glob="**/*.txt")
@@ -84,7 +82,7 @@ def setup_rag_pipeline():
         | (lambda x: x.content)
     )
 
-    print("SPARKY IS 100% LIVE WITH GROQ EMBEDDINGS!")
+    print("SPARKY IS 100% LIVE WITH HUGGINGFACE + GROQ!")
 
 @app.on_event("startup")
 async def startup_event():
