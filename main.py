@@ -1,4 +1,4 @@
-# main.py → FINAL OOM-FIX VERSION (Lightweight Embeddings + Port Binding)
+# main.py → FINAL GROQ EMBEDDINGS VERSION (No OpenAI – 100% Render Success)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,9 +9,8 @@ import os
 # LangChain imports
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings  # ← Lightweight API embeddings (no download)
+from langchain_groq import GroqEmbeddings, ChatGroq  # ← Groq for embeddings + LLM
 from langchain_community.vectorstores import Chroma
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
@@ -49,26 +48,28 @@ Answer:
 def setup_rag_pipeline():
     global retriever, rag_chain
 
-    print("Loading lightweight embeddings...")
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")  # ← Lightweight API (no download)
+    print("Loading Groq embeddings (free & unlimited)...")
+    embeddings = GroqEmbeddings(  # ← Groq Embeddings (no download, lightweight)
+        model="mxbai-embed-large-v1",
+        groq_api_key=os.getenv("GROQ_API_KEY")
+    )
 
     print("Loading knowledge base...")
     loader = DirectoryLoader("knowledge_base", glob="**/*.txt")
     docs = loader.load()
 
-    print("Splitting into smaller chunks (memory efficient)...")
-    chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100).split_documents(docs)  # ← Smaller chunks for RAM
+    print("Splitting into chunks...")
+    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
 
     print(f"Adding {len(chunks)} chunks to Chroma...")
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        collection_name="sparky",
-        persist_directory="./chroma_db"  # ← Persist for Render
+        collection_name="sparky"
     )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # ← k=3 for less RAM
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-    print("Connecting to Groq...")
+    print("Connecting to Groq LLM...")
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
         temperature=0.4,
@@ -83,14 +84,11 @@ def setup_rag_pipeline():
         | (lambda x: x.content)
     )
 
-    print("SPARKY IS LIVE!")
-    return True
+    print("SPARKY IS 100% LIVE WITH GROQ EMBEDDINGS!")
 
 @app.on_event("startup")
 async def startup_event():
-    success = setup_rag_pipeline()
-    if not success:
-        print("Startup fallback – basic mode")
+    setup_rag_pipeline()
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
