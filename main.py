@@ -1,4 +1,4 @@
-# main.py → FINAL RENDER-SUCCESS VERSION (Direct Chroma – No Package Conflicts)
+# main.py → FINAL OOM-FIX VERSION (Lightweight Embeddings + Port Binding)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,11 +6,11 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 import os
 
-# LangChain imports (direct Chroma from community)
+# LangChain imports
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma  # ← DIRECT FROM COMMUNITY (no langchain-chroma needed)
+from langchain_openai import OpenAIEmbeddings  # ← Lightweight API embeddings (no download)
+from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -49,25 +49,26 @@ Answer:
 def setup_rag_pipeline():
     global retriever, rag_chain
 
-    print("Loading free embeddings...")
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print("Loading lightweight embeddings...")
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")  # ← Lightweight API (no download)
 
     print("Loading knowledge base...")
     loader = DirectoryLoader("knowledge_base", glob="**/*.txt")
     docs = loader.load()
 
-    print("Splitting into chunks...")
-    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
+    print("Splitting into smaller chunks (memory efficient)...")
+    chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100).split_documents(docs)  # ← Smaller chunks for RAM
 
-    print(f"Adding {len(chunks)} chunks to Chroma vector DB...")
-    vectorstore = Chroma.from_documents(  # ← Direct Chroma (included in langchain-community)
+    print(f"Adding {len(chunks)} chunks to Chroma...")
+    vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        collection_name="sparky"
+        collection_name="sparky",
+        persist_directory="./chroma_db"  # ← Persist for Render
     )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # ← k=3 for less RAM
 
-    print("Connecting to Groq Llama 3.1 8B...")
+    print("Connecting to Groq...")
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
         temperature=0.4,
@@ -82,11 +83,14 @@ def setup_rag_pipeline():
         | (lambda x: x.content)
     )
 
-    print("SPARKY IS 100% LIVE AND READY WITH GROQ!")
+    print("SPARKY IS LIVE!")
+    return True
 
 @app.on_event("startup")
 async def startup_event():
-    setup_rag_pipeline()
+    success = setup_rag_pipeline()
+    if not success:
+        print("Startup fallback – basic mode")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
