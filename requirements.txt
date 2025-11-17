@@ -8,9 +8,8 @@ langchain==0.3.7
 langchain-community==0.3.3
 langchain-groq==0.2.0
 
-# HuggingFace Embeddings (lightweight, no API key)
-langchain-huggingface==0.1.0
-sentence-transformers==3.2.1
+# Groq Embeddings (API-based, lightweight – no download)
+# (langchain-groq includes GroqEmbeddings)
 
 # Vector Store
 chromadb==0.5.11
