@@ -3,16 +3,13 @@ uvicorn[standard]==0.38.0
 python-dotenv==1.0.1
 jinja2==3.1.4
 
-# LangChain Core
+# LangChain Core (compatible versions)
 langchain==0.3.7
 langchain-community==0.3.3
 langchain-groq==0.2.0
 
-# Groq Embeddings (API-based, lightweight – no download)
-# (langchain-groq includes GroqEmbeddings)
-
-# Vector Store
+# Direct Chroma (no wrapper)
 chromadb==0.5.11
 
-# Utils
+# Utils (no heavy embeddings)
 groq==0.34.1
