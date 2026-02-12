@@ -10,7 +10,7 @@ load_dotenv()
 
 # LangChain imports
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -22,12 +22,22 @@ rag_chain = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup - with timeout to prevent hanging
+    import asyncio
+    global rag_chain
     try:
-        setup_rag_pipeline()
+        # Give RAG setup 30 seconds max
+        await asyncio.wait_for(asyncio.to_thread(setup_rag_pipeline), timeout=30.0)
+        print("✅ RAG pipeline ready!")
+    except asyncio.TimeoutError:
+        print("⚠️ RAG setup timed out → using fallback LLM")
+        rag_chain = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+            temperature=0.5,
+        )
     except Exception as e:
-        print("RAG failed → fallback to direct LLM:", e)
-        global rag_chain
+        print(f"⚠️ RAG failed → using fallback LLM: {e}")
         rag_chain = ChatGroq(
             model="llama-3.1-8b-instant",
             groq_api_key=os.getenv("GROQ_API_KEY"),
