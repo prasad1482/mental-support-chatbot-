@@ -1,117 +1,211 @@
-# main.py → FINAL RENDER-WORKING VERSION (November 17, 2025 – Tested)
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
-import os
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sparky • Mental Wellness Buddy</title>
 
-# LangChain imports (direct Chroma – no wrapper)
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings  # ← Built-in, lightweight
-from langchain_community.vectorstores import Chroma  # ← Direct from community
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
+    <!-- GOOGLE FONTS -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-load_dotenv()
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Poppins", sans-serif;
+            background: #f1f5f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+        .chat-container {
+            width: 100%;
+            max-width: 480px;
+            height: 90vh;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
 
-retriever = None
-rag_chain = None
+        /* Chat Header */
+        .header {
+            padding: 16px;
+            background: linear-gradient(135deg, #4f46e5, #6d28d9);
+            color: white;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
 
-prompt_template = """
-You are Sparky, a warm, caring mental wellness buddy for Indian college students.
-Use simple English + little Hindi if natural.
+        /* Chat Area */
+        .messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
 
-Context:
-{context}
+        /* Chat bubble containers */
+        .user-message, .bot-message {
+            margin-bottom: 15px;
+            max-width: 80%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            line-height: 1.4;
+            animation: fadeIn 0.3s ease-in;
+        }
 
-Question: {question}
+        .user-message {
+            background: #4f46e5;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 2px;
+        }
 
-CRISIS RULE → If user mentions suicide, self-harm, "want to die", "end life", "hopeless" → reply ONLY with:
+        .bot-message {
+            background: #e2e8f0;
+            color: #1e293b;
+            border-bottom-left-radius: 2px;
+        }
 
-**I'm really worried about you. Please reach out right now — you are not alone.**
-Indian 24×7 Free Helplines:
-• iCall (TISS): 9152987821
-• Vandrevala Foundation: 9999666555
-• Sneha Chennai: 044-24640050
-• Emergency: 112
+        /* Chat Input Area */
+        .input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #cbd5e1;
+        }
 
-Otherwise give 1–3 practical tips from context and end with a gentle question.
+        input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            outline: none;
+            font-size: 15px;
+        }
 
-Answer:
-"""
+        button {
+            background: #4f46e5;
+            border: none;
+            padding: 12px 18px;
+            margin-left: 8px;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+            transition: 0.2s;
+        }
 
-def setup_rag_pipeline():
-    global retriever, rag_chain
+        button:hover {
+            background: #4338ca;
+        }
 
-    print("Loading lightweight embeddings...")
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        /* Typing animation */
+        .typing {
+            display: inline-block;
+        }
+        .typing-dot {
+            height: 7px;
+            width: 7px;
+            margin-right: 3px;
+            background: #4f46e5;
+            display: inline-block;
+            border-radius: 50%;
+            animation: blink 1.4s infinite both;
+        }
 
-    print("Loading knowledge base...")
-    loader = DirectoryLoader("knowledge_base", glob="**/*.txt")
-    docs = loader.load()
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-    print("Splitting into chunks...")
-    chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(docs)
+        @keyframes blink {
+            0% { opacity: .2; }
+            20% { opacity: 1; }
+            100% { opacity: .2; }
+        }
 
-    print(f"Adding {len(chunks)} chunks to Chroma...")
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        collection_name="sparky"
-    )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
 
-    print("Connecting to Groq...")
-    llm = ChatGroq(
-        model="llama-3.1-8b-instant",
-        temperature=0.4,
-        groq_api_key=os.getenv("GROQ_API_KEY")
-    )
+    </style>
+</head>
 
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-    rag_chain = (
-        {"context": retriever, "question": lambda x: x}
-        | prompt
-        | llm
-        | (lambda x: x.content)
-    )
 
-    print("SPARKY IS LIVE!")
+<body>
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        setup_rag_pipeline()
-    except Exception as e:
-        print(f"Startup fallback: {e}")
-        global rag_chain
-        from langchain_groq import ChatGroq
-        llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.4, groq_api_key=os.getenv("GROQ_API_KEY"))
-        rag_chain = llm
+<div class="chat-container">
+    <div class="header">💙 Sparky — Your Mental Wellness Buddy</div>
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.get_template("index.html").render({"request": request})
+    <div class="messages" id="messages"></div>
 
-@app.post("/chat")
-async def chat(request: Request):
-    data = await request.json()
-    user_message = data["message"].strip()
+    <div class="input-area">
+        <input id="userInput" placeholder="Type your message..." />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
 
-    crisis_keywords = ["suicide", "kill myself", "end life", "want to die", "hopeless", "self harm", "no point living"]
-    if any(keyword in user_message.lower() for keyword in crisis_keywords):
-        return {"response": """**I'm really worried about you. Please reach out right now — you are not alone.**
-Indian 24×7 Free & Confidential Helplines:
-• iCall (TISS): 9152987821
-• Vandrevala Foundation: 9999666555
-• Sneha Chennai: 044-24640050
-• Emergency: 112"""}
 
-    response = rag_chain.invoke(user_message)
-    return {"response": response}
+
+<script>
+    const messagesDiv = document.getElementById("messages");
+    const input = document.getElementById("userInput");
+
+    function addMessage(text, sender) {
+        const msg = document.createElement("div");
+        msg.className = sender === "user" ? "user-message" : "bot-message";
+        msg.innerHTML = text;
+        messagesDiv.appendChild(msg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addTyping() {
+        const typing = document.createElement("div");
+        typing.id = "typingIndicator";
+        typing.className = "bot-message";
+        typing.innerHTML = `
+            <span class="typing">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </span>
+        `;
+        messagesDiv.appendChild(typing);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function removeTyping() {
+        const typing = document.getElementById("typingIndicator");
+        if (typing) typing.remove();
+    }
+
+    async function sendMessage() {
+        let text = input.value.trim();
+        if (!text) return;
+
+        addMessage(text, "user");
+        input.value = "";
+
+        addTyping();  // Add loading animation
+
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text }),
+        });
+
+        const result = await response.json();
+
+        removeTyping(); // Remove dots
+        addMessage(result.response, "bot");
+    }
+</script>
+
+</body>
+</html>
