@@ -180,4 +180,14 @@ Indian 24×7 Free Helplines:
 
     # Normal RAG response
     response = rag_chain.invoke(data["message"])
-    return {"response": response}
+
+    # Normalize the LLM/RAG output to a plain string so the frontend
+    # doesn't receive an object (which renders as "[object Object]").
+    if hasattr(response, "content"):
+        text = response.content
+    elif isinstance(response, dict) and "content" in response:
+        text = response["content"]
+    else:
+        text = str(response)
+
+    return {"response": text}
