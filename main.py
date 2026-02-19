@@ -25,24 +25,38 @@ async def lifespan(app: FastAPI):
     # Startup - with timeout to prevent hanging
     import asyncio
     global rag_chain
-    try:
-        # Give RAG setup 30 seconds max
-        await asyncio.wait_for(asyncio.to_thread(setup_rag_pipeline), timeout=30.0)
-        print("✅ RAG pipeline ready!")
-    except asyncio.TimeoutError:
-        print("⚠️ RAG setup timed out → using fallback LLM")
-        rag_chain = ChatGroq(
+    if os.getenv("DISABLE_RAG") == "true":
+        print("🔄 RAG disabled via env var → using fallback LLM with prompt")
+        llm = ChatGroq(
             model="llama-3.1-8b-instant",
             groq_api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.5,
         )
-    except Exception as e:
-        print(f"⚠️ RAG failed → using fallback LLM: {e}")
-        rag_chain = ChatGroq(
-            model="llama-3.1-8b-instant",
-            groq_api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.5,
-        )
+        prompt = ChatPromptTemplate.from_template(prompt_template)
+        rag_chain = ({"context": lambda _: "", "question": lambda x: x} | prompt | llm | (lambda x: x.content))
+    else:
+        try:
+            # Give RAG setup 30 seconds max
+            await asyncio.wait_for(asyncio.to_thread(setup_rag_pipeline), timeout=30.0)
+            print("✅ RAG pipeline ready!")
+        except asyncio.TimeoutError:
+            print("⚠️ RAG setup timed out → using fallback LLM with prompt")
+            llm = ChatGroq(
+                model="llama-3.1-8b-instant",
+                groq_api_key=os.getenv("GROQ_API_KEY"),
+                temperature=0.5,
+            )
+            prompt = ChatPromptTemplate.from_template(prompt_template)
+            rag_chain = ({"context": lambda _: "", "question": lambda x: x} | prompt | llm | (lambda x: x.content))
+        except Exception as e:
+            print(f"⚠️ RAG failed → using fallback LLM with prompt: {e}")
+            llm = ChatGroq(
+                model="llama-3.1-8b-instant",
+                groq_api_key=os.getenv("GROQ_API_KEY"),
+                temperature=0.5,
+            )
+            prompt = ChatPromptTemplate.from_template(prompt_template)
+            rag_chain = ({"context": lambda _: "", "question": lambda x: x} | prompt | llm | (lambda x: x.content))
     yield
     # Shutdown (if needed)
 
@@ -111,9 +125,11 @@ def setup_rag_pipeline():
 
     print("Loading lightweight embeddings...")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print("Embeddings loaded.")
 
     print("Loading knowledge base (manual)...")
     documents = load_knowledge_base()
+    print(f"Loaded {len(documents)} documents.")
 
     if not documents:
         raise ValueError("No knowledge base documents found.")
@@ -130,6 +146,7 @@ def setup_rag_pipeline():
 
     print("Building Chroma vector store...")
     vectorstore = Chroma.from_texts(chunks, embeddings)
+    print("Vector store built.")
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
@@ -162,6 +179,7 @@ async def home(request: Request):
 
 @app.post("/chat")
 async def chat(request: Request):
+    import asyncio
     data = await request.json()
     user_msg = data["message"].strip().lower()
 
@@ -178,8 +196,8 @@ Indian 24×7 Free Helplines:
 • Emergency: 112"""
         }
 
-    # Normal RAG response
-    response = rag_chain.invoke(data["message"])
+    # Normal RAG response - run in thread to avoid blocking
+    response = await asyncio.to_thread(rag_chain.invoke, data["message"])
 
     # Normalize the LLM/RAG output to a plain string so the frontend
     # doesn't receive an object (which renders as "[object Object]").
